@@ -1,0 +1,90 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  CUSTOMER
+  ADMIN
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  role      UserRole @default(CUSTOMER)
+  orders    Order[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Category {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  slug      String   @unique
+  books     Book[]
+  createdAt DateTime @default(now())
+}
+
+model Book {
+  id            String      @id @default(cuid())
+  title         String
+  slug          String      @unique
+  author        String
+  description   String      @db.Text
+  coverUrl      String?
+  fileKey       String      // Private S3/R2 storage key; never expose as a public URL.
+  priceInTiyin  Int
+  currency      String      @default("UZS")
+  publishedYear Int?
+  language      String      @default("uz")
+  pageCount     Int?
+  isPublished   Boolean     @default(false)
+  categoryId    String
+  category      Category    @relation(fields: [categoryId], references: [id])
+  orderItems    OrderItem[]
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([categoryId, isPublished])
+  @@index([title, author])
+}
+
+model Order {
+  id              String      @id @default(cuid())
+  userId          String
+  user            User        @relation(fields: [userId], references: [id])
+  status          OrderStatus @default(PENDING)
+  totalInTiyin    Int
+  currency        String      @default("UZS")
+  paymentProvider String?
+  providerRef     String?     @unique
+  items           OrderItem[]
+  paidAt          DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@index([userId, status])
+}
+
+model OrderItem {
+  id             String @id @default(cuid())
+  orderId        String
+  order          Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  bookId         String
+  book           Book   @relation(fields: [bookId], references: [id])
+  priceInTiyin   Int    // Snapshot at purchase time.
+
+  @@unique([orderId, bookId])
+}
